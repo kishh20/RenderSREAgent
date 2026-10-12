@@ -1,0 +1,83 @@
+name: Render SRE Self-Healing & AI Monitor
+
+on:
+  schedule:
+    # Runs every 10 minutes (Note: pair with cron-job.org 5-min ping for zero cold starts)
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: render-sre-monitor
+  cancel-in-progress: false
+
+jobs:
+  monitor-and-heal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout main branch (Agent Code)
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Restore telemetry state from orphan gh-pages branch
+        run: |
+          git fetch origin gh-pages:gh-pages || true
+          if git rev-parse --verify gh-pages >/dev/null 2>&1; then
+            echo "Restoring data/state.json and data/checks.csv from gh-pages..."
+            git checkout gh-pages -- data/state.json data/checks.csv 2>/dev/null || true
+            git reset HEAD data/ 2>/dev/null || true
+          else
+            echo "First run: no existing gh-pages state found."
+          fi
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Health Check, Self-Healing & AI Diagnosis
+        env:
+          APP_NAME: ${{ secrets.APP_NAME || 'Render Web App' }}
+          TARGET_URL: ${{ secrets.TARGET_URL }}
+          EXPECTED_KEYWORD: ${{ secrets.EXPECTED_KEYWORD || 'ok' }}
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST || 'smtp.gmail.com' }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT || '587' }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
+        run: |
+          python -m src.main
+
+      - name: Publish Dashboard & State to Orphan gh-pages (Zero Commit Spam on main)
+        run: |
+          mkdir -p /tmp/gh-pages-stage/data
+          cp public/index.html /tmp/gh-pages-stage/index.html
+          cp data/checks.csv /tmp/gh-pages-stage/data/checks.csv
+          cp data/state.json /tmp/gh-pages-stage/data/state.json
+          touch /tmp/gh-pages-stage/.nojekyll
+
+          cd /tmp/gh-pages-stage
+          git init
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan gh-pages
+          git add .
+          git commit -m "chore(telemetry): update status dashboard and state [skip ci]"
+          git remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+          git push --force origin gh-pages:gh-pages
