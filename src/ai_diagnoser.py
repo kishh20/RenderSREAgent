@@ -64,23 +64,43 @@ def diagnose_failure_with_gemini(
     log_lines: list[str],
 ) -> str:
     """
-    Send the last ~100 Render log lines and failure telemetry to Gemini (`gemini-3.8-flash`)
-    using the `google-genai` Interactions API and return a 3-line root-cause summary & fix.
+    Send the last ~100 Render log lines and telemetry to Gemini (`gemini-3.8-flash`)
+    using the `google-genai` Interactions API and return a 3-line SRE summary.
+    Works for both outage root-cause triage (DOWN) and on-demand health audits (/diagnose when UP).
     """
     if not config.gemini_api_key:
         logger.info("GEMINI_API_KEY not set; using built-in SRE heuristic diagnosis.")
+        if check.is_up:
+            return (
+                f"Status: Service is HEALTHY (HTTP {check.status_code}, {check.latency_ms}ms latency).\n"
+                f"Logs: Inspected {len(log_lines)} recent log lines; no fatal crashes detected.\n"
+                "Recommendation: Keep 5-min heartbeat active to prevent Render free-tier spin-down."
+            )
         return _heuristic_fallback_diagnosis(check, log_lines)
 
     recent_logs = "\n".join(log_lines[-100:]) if log_lines else "(No Render API logs available)"
+    health_state = "HEALTHY (UP)" if check.is_up else "OUTAGE (DOWN)"
+    sys_inst = (
+        SRE_SYSTEM_INSTRUCTION
+        if not check.is_up
+        else (
+            "You are a Staff Site Reliability Engineer auditing a live Render web service. "
+            "Respond in EXACTLY 3 concise lines (no markdown headers, no extra commentary):\n"
+            "Line 1 - Health Summary: <1-sentence assessment of current status & latency>\n"
+            "Line 2 - Log Findings: <key observation from the recent container logs, e.g. spin-downs, warnings, or clean startup>\n"
+            "Line 3 - Recommendation: <1 actionable SRE tip based on the logs>"
+        )
+    )
     prompt = (
         f"Service Name: {config.app_name}\n"
         f"Target URL: {config.target_url}\n"
-        f"Failing Status Code: {check.status_code}\n"
-        f"Error Reason: {check.error_reason}\n"
-        f"Latency: {check.latency_ms} ms (Retries: {check.attempts_used})\n\n"
+        f"Current State: {health_state}\n"
+        f"HTTP Status Code: {check.status_code}\n"
+        f"Error Reason: {check.error_reason or 'None'}\n"
+        f"Latency: {check.latency_ms} ms\n\n"
         f"--- LAST 100 RENDER LOG LINES ---\n{recent_logs}\n"
         "--- END LOGS ---\n\n"
-        "Provide your 3-line diagnosis (Root Cause, Evidence, Fix):"
+        "Provide your 3-line SRE summary:"
     )
 
     try:
@@ -90,7 +110,7 @@ def diagnose_failure_with_gemini(
         model_name = config.gemini_model or "gemini-3.8-flash"
         interaction = client.interactions.create(
             model=model_name,
-            system_instruction=SRE_SYSTEM_INSTRUCTION,
+            system_instruction=sys_inst,
             input=prompt,
             store=False,
         )
@@ -101,4 +121,10 @@ def diagnose_failure_with_gemini(
     except Exception as exc:
         logger.warning("Gemini API diagnosis failed (%s); falling back to heuristics.", exc)
 
+    if check.is_up:
+        return (
+            f"Health Summary: Service is UP and responding in {check.latency_ms}ms (HTTP {check.status_code}).\n"
+            f"Log Findings: Analyzed {len(log_lines)} recent Render log entries.\n"
+            "Recommendation: No immediate action needed; service is operating normally."
+        )
     return _heuristic_fallback_diagnosis(check, log_lines)
