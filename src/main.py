@@ -128,7 +128,12 @@ def run_monitor_cycle(config: MonitorConfig | None = None) -> int:
         subj, msg = format_daily_summary(cfg, metrics, check.timestamp_ist)
         dispatch_alert(cfg, subj, msg)
 
-    # 11. Save updated state.json
+    # 11. Process any incoming Telegram Bot commands (/status, /logs, /diagnose, /restart)
+    from src.telegram_commands import process_telegram_commands
+
+    process_telegram_commands(cfg, state, check, metrics)
+
+    # 12. Save updated state.json
     state.save(cfg.state_json_path)
     logger.info(
         "Cycle complete | status=%s | latency=%dms | uptime_24h=%s%%",

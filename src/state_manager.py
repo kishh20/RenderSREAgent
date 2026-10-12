@@ -60,6 +60,7 @@ class AgentState:
     last_daily_summary_date: str = ""
     last_ssl_alert_date: str = ""
     last_check_ist: str = ""
+    last_telegram_update_id: int = 0
     incidents: list[dict[str, Any]] = field(default_factory=list)
 
     @classmethod
@@ -80,6 +81,7 @@ class AgentState:
                 last_daily_summary_date=str(raw.get("last_daily_summary_date", "")),
                 last_ssl_alert_date=str(raw.get("last_ssl_alert_date", "")),
                 last_check_ist=str(raw.get("last_check_ist", "")),
+                last_telegram_update_id=int(raw.get("last_telegram_update_id", 0)),
                 incidents=list(raw.get("incidents", [])),
             )
         except Exception as exc:
