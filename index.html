@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="refresh" content="300">
+  <title>Hallucination Detector — SRE Status & Self-Healing Monitor</title>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card: #111827;
+      --border: #1f2937;
+      --text: #f9fafb;
+      --muted: #9ca3af;
+      --green: #10b981;
+      --amber: #f59e0b;
+      --red: #ef4444;
+      --blue: #3b82f6;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      padding: 2rem 1rem;
+    }
+    .container { max-width: 960px; margin: 0 auto; }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+      padding: 1.5rem;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      margin-bottom: 1.5rem;
+    }
+    .title-group h1 { font-size: 1.35rem; font-weight: 700; }
+    .title-group a { color: var(--muted); font-size: 0.88rem; text-decoration: none; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      border-radius: 999px;
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+    .badge-up { background: rgba(16, 185, 129, 0.15); color: var(--green); border: 1px solid rgba(16, 185, 129, 0.35); }
+    .badge-down { background: rgba(239, 68, 68, 0.15); color: var(--red); border: 1px solid rgba(239, 68, 68, 0.35); }
+    .dot { width: 9px; height: 9px; border-radius: 50%; background: currentColor; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    .metric-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.15rem;
+    }
+    .metric-label { color: var(--muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; }
+    .metric-val { font-size: 1.55rem; font-weight: 700; margin-top: 0.25rem; }
+    .metric-sub { color: var(--muted); font-size: 0.78rem; margin-top: 0.15rem; }
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 1.4rem;
+      margin-bottom: 1.5rem;
+    }
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+    .panel-header h2 { font-size: 1.05rem; font-weight: 600; }
+    .uptime-strip {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(6px, 1fr));
+      gap: 3px;
+      height: 30px;
+      align-items: stretch;
+    }
+    .uptime-bar { border-radius: 3px; transition: opacity 0.15s; }
+    .uptime-bar:hover { opacity: 0.75; }
+    .bar-up { background: var(--green); }
+    .bar-cold { background: var(--amber); }
+    .bar-down { background: var(--red); }
+    .latency-svg { width: 100%; height: auto; display: block; }
+    .incident-card {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem;
+      margin-bottom: 0.85rem;
+      background: rgba(255, 255, 255, 0.015);
+    }
+    .incident-header {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      flex-wrap: wrap;
+      margin-bottom: 0.45rem;
+    }
+    .inc-id { font-family: monospace; font-weight: 700; color: var(--red); }
+    .inc-time { color: var(--muted); font-size: 0.84rem; margin-left: auto; }
+    .inc-reason { font-size: 0.92rem; margin-bottom: 0.5rem; }
+    .ai-box {
+      background: rgba(59, 130, 246, 0.09);
+      border-left: 3px solid var(--blue);
+      padding: 0.65rem 0.85rem;
+      border-radius: 6px;
+      font-size: 0.86rem;
+      color: #dbeafe;
+    }
+    .pill {
+      font-size: 0.75rem;
+      padding: 0.15rem 0.55rem;
+      border-radius: 999px;
+      font-weight: 600;
+    }
+    .pill-healed { background: rgba(16, 185, 129, 0.18); color: var(--green); }
+    .pill-warn { background: rgba(245, 158, 11, 0.18); color: var(--amber); }
+    .empty-state { color: var(--muted); font-size: 0.92rem; padding: 1rem 0; text-align: center; }
+    .footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top: 2rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <div class="title-group">
+        <h1>Hallucination Detector</h1>
+        <a href="https://hallucination-detector-tveu.onrender.com/_stcore/health" target="_blank" rel="noopener">https://hallucination-detector-tveu.onrender.com/_stcore/health</a>
+      </div>
+      <div class="badge badge-down">
+        <span class="dot"></span>
+        Service Outage Detected
+      </div>
+    </header>
+
+    <section class="grid">
+      <div class="metric-card">
+        <div class="metric-label">Uptime (24h)</div>
+        <div class="metric-val">0.00%</div>
+        <div class="metric-sub">7d: 33.33% · 30d: 33.33%</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Avg Latency (24h)</div>
+        <div class="metric-val">0 ms</div>
+        <div class="metric-sub">P95: 0 ms</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Cold Starts (24h)</div>
+        <div class="metric-val">0</div>
+        <div class="metric-sub">Threshold: &gt;10s</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">SSL Certificate</div>
+        <div class="metric-val">64 d</div>
+        <div class="metric-sub">Warn &lt; 14 days</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Self-Heals (24h)</div>
+        <div class="metric-val">1</div>
+        <div class="metric-sub">Cap: 2/hr via Render API</div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Recent Check History (Last 90 Checks)</h2>
+        <span style="color: var(--muted); font-size: 0.82rem;">Green = UP · Amber = Cold Start (&gt;10s) · Red = DOWN</span>
+      </div>
+      <div class="uptime-strip">
+        <div class="uptime-bar bar-up" title="2026-10-12 21:25:16 IST — UP (142 ms)"></div><div class="uptime-bar bar-down" title="2026-10-12 21:40:00 IST — DOWN (115 ms)"></div><div class="uptime-bar bar-down" title="2026-10-12 21:52:26 IST — DOWN (244 ms)"></div><div class="uptime-bar bar-up" title="2026-10-12 21:54:15 IST — UP (184 ms)"></div><div class="uptime-bar bar-up" title="2026-10-13 04:34:42 IST — UP (300 ms)"></div><div class="uptime-bar bar-up" title="2026-10-13 09:01:46 IST — UP (149 ms)"></div><div class="uptime-bar bar-up" title="2026-10-13 16:36:08 IST — UP (116 ms)"></div><div class="uptime-bar bar-up" title="2026-10-13 23:47:04 IST — UP (256 ms)"></div><div class="uptime-bar bar-up" title="2026-10-14 04:26:33 IST — UP (125 ms)"></div><div class="uptime-bar bar-up" title="2026-10-14 07:17:07 IST — UP (190 ms)"></div><div class="uptime-bar bar-up" title="2026-10-14 12:17:34 IST — UP (106 ms)"></div><div class="uptime-bar bar-up" title="2026-10-14 18:00:15 IST — UP (296 ms)"></div><div class="uptime-bar bar-up" title="2026-10-14 23:04:54 IST — UP (311 ms)"></div><div class="uptime-bar bar-down" title="2026-10-15 02:28:07 IST — DOWN (35080 ms)"></div><div class="uptime-bar bar-down" title="2026-10-15 05:22:34 IST — DOWN (115 ms)"></div><div class="uptime-bar bar-down" title="2026-10-15 09:41:51 IST — DOWN (175 ms)"></div><div class="uptime-bar bar-down" title="2026-10-15 14:44:19 IST — DOWN (5169 ms)"></div><div class="uptime-bar bar-down" title="2026-10-15 19:44:01 IST — DOWN (6243 ms)"></div><div class="uptime-bar bar-down" title="2026-10-15 23:54:04 IST — DOWN (157 ms)"></div><div class="uptime-bar bar-down" title="2026-10-16 03:10:38 IST — DOWN (308 ms)"></div><div class="uptime-bar bar-down" title="2026-10-16 05:25:46 IST — DOWN (273 ms)"></div><div class="uptime-bar bar-down" title="2026-10-16 09:48:11 IST — DOWN (164 ms)"></div><div class="uptime-bar bar-down" title="2026-10-16 14:38:29 IST — DOWN (15162 ms)"></div><div class="uptime-bar bar-down" title="2026-10-16 19:28:21 IST — DOWN (221 ms)"></div><div class="uptime-bar bar-down" title="2026-10-16 23:27:32 IST — DOWN (35062 ms)"></div><div class="uptime-bar bar-down" title="2026-10-17 02:26:34 IST — DOWN (163 ms)"></div><div class="uptime-bar bar-down" title="2026-10-17 04:57:18 IST — DOWN (382 ms)"></div><div class="uptime-bar bar-down" title="2026-10-17 06:59:15 IST — DOWN (197 ms)"></div><div class="uptime-bar bar-down" title="2026-10-17 11:36:06 IST — DOWN (137 ms)"></div><div class="uptime-bar bar-down" title="2026-10-17 16:10:53 IST — DOWN (5197 ms)"></div><div class="uptime-bar bar-down" title="2026-10-17 19:28:21 IST — DOWN (103 ms)"></div><div class="uptime-bar bar-down" title="2026-10-18 00:52:03 IST — DOWN (123 ms)"></div><div class="uptime-bar bar-down" title="2026-10-18 03:10:02 IST — DOWN (157 ms)"></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Response Latency Trend (ms)</h2>
+        <span style="color: var(--muted); font-size: 0.82rem;">Last check: 2026-10-18 03:10:02 IST</span>
+      </div>
+      
+    <svg viewBox="0 0 860 210" class="latency-svg" role="img" aria-label="Latency chart">
+      <defs>
+        <linearGradient id="latGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#10b981" stop-opacity="0.32"/>
+          <stop offset="100%" stop-color="#10b981" stop-opacity="0.0"/>
+        </linearGradient>
+      </defs>
+      <line x1="44" y1="24" x2="816" y2="24" stroke="#1f2937" stroke-dasharray="4"/>
+      <line x1="44" y1="105.0" x2="816" y2="105.0" stroke="#1f2937" stroke-dasharray="4"/>
+      <line x1="44" y1="186" x2="816" y2="186" stroke="#374151"/>
+      <text x="6" y="28" fill="#9ca3af" font-size="11">35080ms</text>
+      <text x="6" y="109.0" fill="#9ca3af" font-size="11">17540ms</text>
+      <text x="6" y="186" fill="#9ca3af" font-size="11">0ms</text>
+      <polygon points="44.0,186.0 44.0,185.3 68.1,185.5 92.2,184.9 116.4,185.2 140.5,184.6 164.6,185.3 188.8,185.5 212.9,184.8 237.0,185.4 261.1,185.1 285.2,185.5 309.4,184.6 333.5,184.6 357.6,24.0 381.8,185.5 405.9,185.2 430.0,162.1 454.1,157.2 478.2,185.3 502.4,184.6 526.5,184.7 550.6,185.2 574.8,116.0 598.9,185.0 623.0,24.1 647.1,185.2 671.2,184.2 695.4,185.1 719.5,185.4 743.6,162.0 767.8,185.5 791.9,185.4 816.0,185.3 816.0,186.0" fill="url(#latGrad)"/>
+      <polyline fill="none" stroke="#10b981" stroke-width="2.2" points="44.0,185.3 68.1,185.5 92.2,184.9 116.4,185.2 140.5,184.6 164.6,185.3 188.8,185.5 212.9,184.8 237.0,185.4 261.1,185.1 285.2,185.5 309.4,184.6 333.5,184.6 357.6,24.0 381.8,185.5 405.9,185.2 430.0,162.1 454.1,157.2 478.2,185.3 502.4,184.6 526.5,184.7 550.6,185.2 574.8,116.0 598.9,185.0 623.0,24.1 647.1,185.2 671.2,184.2 695.4,185.1 719.5,185.4 743.6,162.0 767.8,185.5 791.9,185.4 816.0,185.3"/>
+      <circle cx="44.0" cy="185.3" r="2.5" fill="#10b981"><title>2026-10-12 21:25:16 IST | UP | 142ms</title></circle><circle cx="68.1" cy="185.5" r="4.5" fill="#ef4444"><title>2026-10-12 21:40:00 IST | DOWN | 115ms</title></circle><circle cx="92.2" cy="184.9" r="4.5" fill="#ef4444"><title>2026-10-12 21:52:26 IST | DOWN | 244ms</title></circle><circle cx="116.4" cy="185.2" r="2.5" fill="#10b981"><title>2026-10-12 21:54:15 IST | UP | 184ms</title></circle><circle cx="140.5" cy="184.6" r="2.5" fill="#10b981"><title>2026-10-13 04:34:42 IST | UP | 300ms</title></circle><circle cx="164.6" cy="185.3" r="2.5" fill="#10b981"><title>2026-10-13 09:01:46 IST | UP | 149ms</title></circle><circle cx="188.8" cy="185.5" r="2.5" fill="#10b981"><title>2026-10-13 16:36:08 IST | UP | 116ms</title></circle><circle cx="212.9" cy="184.8" r="2.5" fill="#10b981"><title>2026-10-13 23:47:04 IST | UP | 256ms</title></circle><circle cx="237.0" cy="185.4" r="2.5" fill="#10b981"><title>2026-10-14 04:26:33 IST | UP | 125ms</title></circle><circle cx="261.1" cy="185.1" r="2.5" fill="#10b981"><title>2026-10-14 07:17:07 IST | UP | 190ms</title></circle><circle cx="285.2" cy="185.5" r="2.5" fill="#10b981"><title>2026-10-14 12:17:34 IST | UP | 106ms</title></circle><circle cx="309.4" cy="184.6" r="2.5" fill="#10b981"><title>2026-10-14 18:00:15 IST | UP | 296ms</title></circle><circle cx="333.5" cy="184.6" r="2.5" fill="#10b981"><title>2026-10-14 23:04:54 IST | UP | 311ms</title></circle><circle cx="357.6" cy="24.0" r="4.5" fill="#ef4444"><title>2026-10-15 02:28:07 IST | DOWN | 35080ms</title></circle><circle cx="381.8" cy="185.5" r="4.5" fill="#ef4444"><title>2026-10-15 05:22:34 IST | DOWN | 115ms</title></circle><circle cx="405.9" cy="185.2" r="4.5" fill="#ef4444"><title>2026-10-15 09:41:51 IST | DOWN | 175ms</title></circle><circle cx="430.0" cy="162.1" r="4.5" fill="#ef4444"><title>2026-10-15 14:44:19 IST | DOWN | 5169ms</title></circle><circle cx="454.1" cy="157.2" r="4.5" fill="#ef4444"><title>2026-10-15 19:44:01 IST | DOWN | 6243ms</title></circle><circle cx="478.2" cy="185.3" r="4.5" fill="#ef4444"><title>2026-10-15 23:54:04 IST | DOWN | 157ms</title></circle><circle cx="502.4" cy="184.6" r="4.5" fill="#ef4444"><title>2026-10-16 03:10:38 IST | DOWN | 308ms</title></circle><circle cx="526.5" cy="184.7" r="4.5" fill="#ef4444"><title>2026-10-16 05:25:46 IST | DOWN | 273ms</title></circle><circle cx="550.6" cy="185.2" r="4.5" fill="#ef4444"><title>2026-10-16 09:48:11 IST | DOWN | 164ms</title></circle><circle cx="574.8" cy="116.0" r="4.5" fill="#ef4444"><title>2026-10-16 14:38:29 IST | DOWN | 15162ms</title></circle><circle cx="598.9" cy="185.0" r="4.5" fill="#ef4444"><title>2026-10-16 19:28:21 IST | DOWN | 221ms</title></circle><circle cx="623.0" cy="24.1" r="4.5" fill="#ef4444"><title>2026-10-16 23:27:32 IST | DOWN | 35062ms</title></circle><circle cx="647.1" cy="185.2" r="4.5" fill="#ef4444"><title>2026-10-17 02:26:34 IST | DOWN | 163ms</title></circle><circle cx="671.2" cy="184.2" r="4.5" fill="#ef4444"><title>2026-10-17 04:57:18 IST | DOWN | 382ms</title></circle><circle cx="695.4" cy="185.1" r="4.5" fill="#ef4444"><title>2026-10-17 06:59:15 IST | DOWN | 197ms</title></circle><circle cx="719.5" cy="185.4" r="4.5" fill="#ef4444"><title>2026-10-17 11:36:06 IST | DOWN | 137ms</title></circle><circle cx="743.6" cy="162.0" r="4.5" fill="#ef4444"><title>2026-10-17 16:10:53 IST | DOWN | 5197ms</title></circle><circle cx="767.8" cy="185.5" r="4.5" fill="#ef4444"><title>2026-10-17 19:28:21 IST | DOWN | 103ms</title></circle><circle cx="791.9" cy="185.4" r="4.5" fill="#ef4444"><title>2026-10-18 00:52:03 IST | DOWN | 123ms</title></circle><circle cx="816.0" cy="185.3" r="4.5" fill="#ef4444"><title>2026-10-18 03:10:02 IST | DOWN | 157ms</title></circle>
+    </svg>
+    
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Incidents, Self-Healing &amp; Gemini AI Root-Cause Triage</h2>
+      </div>
+      
+            <div class="incident-card">
+              <div class="incident-header">
+                <span class="inc-id">INC-1792011487</span>
+                <span class="pill pill-warn">Auto-Restart Attempted</span>
+                <span class="inc-time">2026-10-15 02:28:07 IST → Ongoing</span>
+              </div>
+              <div class="inc-reason"><strong>Failing Check:</strong> Timeout after 35s</div>
+              <div class="ai-box"><strong>🤖 Gemini 3.8 Flash Triage:</strong><br>Root Cause: The service is running a Uvicorn/FastAPI application while Render is configured to ping an unhandled Streamlit health check path.<br>Evidence: &quot;GET /_stcore/health HTTP/1.1&quot; 404 Not Found<br>Fix: Change the Health Check Path in Render settings to a valid API route (e.g., `/` or `/healthz`) or define the `/_stcore/health` endpoint in `server.py`.</div>
+            </div>
+            
+
+            <div class="incident-card">
+              <div class="incident-header">
+                <span class="inc-id">INC-1791821400</span>
+                
+                <span class="inc-time">2026-10-12 21:40:00 IST → 2026-10-12 21:54:15 IST</span>
+              </div>
+              <div class="inc-reason"><strong>Failing Check:</strong> HTTP 503</div>
+              <div class="ai-box"><strong>🤖 Gemini 3.8 Flash Triage:</strong><br>Root Cause: The Streamlit application is stopped, suspended, or failing to wake up from an idle state, preventing Render&#x27;s proxy from reaching the backend container.<br>Evidence: HTTP 503 response on the `/_stcore/health` endpoint with 115ms latency and no active container runtime logs.<br>Fix: Restart the service in the Render dashboard and ensure your start command includes `--server.port $PORT --server.address 0.0.0.0`.</div>
+            </div>
+            
+    </section>
+
+    <footer class="footer">
+      Powered by Render SRE Self-Healing Agent · Zero-Commit-Spam Orphan <code>gh-pages</code> Telemetry · Updated 2026-10-18 03:10:02 IST
+    </footer>
+  </div>
+</body>
+</html>

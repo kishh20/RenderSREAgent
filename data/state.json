@@ -1,0 +1,39 @@
+{
+  "current_status": "DOWN",
+  "consecutive_failures": 20,
+  "consecutive_slow": 0,
+  "slow_alert_active": false,
+  "restart_timestamps": [
+    1792273202.308894
+  ],
+  "last_daily_summary_date": "2026-10-17",
+  "last_ssl_alert_date": "",
+  "last_check_ist": "2026-10-18 03:10:02 IST",
+  "last_telegram_update_id": 0,
+  "incidents": [
+    {
+      "id": "INC-1792011487",
+      "start_time_ist": "2026-10-15 02:28:07 IST",
+      "start_epoch": 1792011487.271292,
+      "end_time_ist": "Ongoing",
+      "duration_sec": 0,
+      "reason": "Timeout after 35s",
+      "status_code": 0,
+      "auto_restart_attempted": true,
+      "auto_restart_succeeded": false,
+      "ai_diagnosis": "Root Cause: The service is running a Uvicorn/FastAPI application while Render is configured to ping an unhandled Streamlit health check path.\nEvidence: \"GET /_stcore/health HTTP/1.1\" 404 Not Found\nFix: Change the Health Check Path in Render settings to a valid API route (e.g., `/` or `/healthz`) or define the `/_stcore/health` endpoint in `server.py`."
+    },
+    {
+      "id": "INC-1791821400",
+      "start_time_ist": "2026-10-12 21:40:00 IST",
+      "start_epoch": 1791821400.477597,
+      "end_time_ist": "2026-10-12 21:54:15 IST",
+      "duration_sec": 854,
+      "reason": "HTTP 503",
+      "status_code": 503,
+      "auto_restart_attempted": false,
+      "auto_restart_succeeded": false,
+      "ai_diagnosis": "Root Cause: The Streamlit application is stopped, suspended, or failing to wake up from an idle state, preventing Render's proxy from reaching the backend container.\nEvidence: HTTP 503 response on the `/_stcore/health` endpoint with 115ms latency and no active container runtime logs.\nFix: Restart the service in the Render dashboard and ensure your start command includes `--server.port $PORT --server.address 0.0.0.0`."
+    }
+  ]
+}
