@@ -1,0 +1,49 @@
+{
+  "current_status": "UP",
+  "consecutive_failures": 0,
+  "consecutive_slow": 9,
+  "slow_alert_active": true,
+  "restart_timestamps": [],
+  "last_daily_summary_date": "2026-10-24",
+  "last_ssl_alert_date": "",
+  "last_check_ist": "2026-10-24 21:23:33 IST",
+  "last_telegram_update_id": 128826714,
+  "incidents": [
+    {
+      "id": "INC-1792720932",
+      "start_time_ist": "2026-10-23 07:32:12 IST",
+      "start_epoch": 1792720932.840455,
+      "end_time_ist": "2026-10-23 12:57:29 IST",
+      "duration_sec": 19517,
+      "reason": "Timeout after 35s",
+      "status_code": 0,
+      "auto_restart_attempted": false,
+      "auto_restart_succeeded": false,
+      "ai_diagnosis": "Line 1 - Root Cause: The application failed to respond because heavy ML dependencies (PyTorch/Transformers) and synchronous startup tasks blocked Uvicorn from binding before the 35-second cold-start timeout.\nLine 2 - Evidence: HTTP Status 0 / Timeout after 35070 ms while logs stalled at `Running 'uvicorn server:app --host 0.0.0.0 --port $PORT'` without reaching `Uvicorn running`.\nLine 3 - Fix: Defer model initialization by lazy-loading PyTorch/Transformers pipelines on first request, or upgrade to an always-on paid instance to eliminate idle spin-down."
+    },
+    {
+      "id": "INC-1792672187",
+      "start_time_ist": "2026-10-22 17:59:47 IST",
+      "start_epoch": 1792672187.307725,
+      "end_time_ist": "2026-10-23 02:18:32 IST",
+      "duration_sec": 29925,
+      "reason": "Timeout after 35s",
+      "status_code": 0,
+      "auto_restart_attempted": false,
+      "auto_restart_succeeded": false,
+      "ai_diagnosis": "Root Cause: Application failed to bind to Render's $PORT environment variable in time.\nEvidence: Timeout after 35s\nFix: Bind server to 0.0.0.0:$PORT and defer heavy initialization until after server startup."
+    },
+    {
+      "id": "INC-1792654741",
+      "start_time_ist": "2026-10-22 13:09:01 IST",
+      "start_epoch": 1792654741.484172,
+      "end_time_ist": "2026-10-22 13:09:33 IST",
+      "duration_sec": 32,
+      "reason": "HTTP 404",
+      "status_code": 404,
+      "auto_restart_attempted": false,
+      "auto_restart_succeeded": false,
+      "ai_diagnosis": "Root Cause: The requested health check path `/health` is not defined or mapped in the application's routing table.\nEvidence: Target URL returned HTTP Status Code 404 with 910 ms latency.\nFix: Add a `GET /health` route returning HTTP 200 in the application code, or update Render's \"Health Check Path\" setting to match an existing endpoint."
+    }
+  ]
+}
