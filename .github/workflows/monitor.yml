@@ -2,8 +2,8 @@ name: Render SRE Self-Healing & AI Monitor
 
 on:
   schedule:
-    # Runs every 10 minutes (Note: pair with cron-job.org 5-min ping for zero cold starts)
-    - cron: "*/10 * * * *"
+    # Runs every 5 minutes to prevent Render 15-minute idle sleep
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 permissions:

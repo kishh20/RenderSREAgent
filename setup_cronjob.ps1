@@ -16,7 +16,7 @@ $headers = @{
 
 $body = @{
     job = @{
-        url             = "https://hallucination-detector-tveu.onrender.com/_stcore/health"
+        url             = "https://hallucination-detector-tveu.onrender.com"
         title           = "Hallucination Detector Keep-Alive (5m)"
         enabled         = $true
         saveResponses   = $false
@@ -35,4 +35,4 @@ $body = @{
 
 $response = Invoke-RestMethod -Uri "https://api.cron-job.org/jobs" -Method Put -Headers $headers -Body $body
 Write-Host "`n✅ Created 5-minute Keep-Alive cron job on cron-job.org! (Job ID: $($response.jobId))" -ForegroundColor Green
-Write-Host "Target: https://hallucination-detector-tveu.onrender.com/_stcore/health (Every 5 minutes)`n" -ForegroundColor Green
+Write-Host "Target: https://hallucination-detector-tveu.onrender.com (Every 5 minutes)`n" -ForegroundColor Green

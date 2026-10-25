@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 import time
 from pathlib import Path
 
@@ -24,12 +25,24 @@ def _load_dotenv_if_present() -> None:
     env_path = BASE_DIR / ".env"
     if not env_path.exists():
         return
-    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+    for raw_line in env_path.read_text(encoding="utf-8-sig").splitlines():
         line = raw_line.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
         k, v = line.split("=", 1)
-        os.environ.setdefault(k.strip(), v.strip())
+        os.environ[k.strip()] = v.strip()
+
+
+def _keep_alive_worker(config: MonitorConfig) -> None:
+    """Background worker that pings target_url every 4 minutes to guarantee zero Render idle sleep."""
+    logger.info("Keep-alive background worker active (pinging every 4 minutes)...")
+    while True:
+        try:
+            r = requests.get(config.target_url, timeout=25)
+            logger.info("Keep-alive ping sent to %s -> HTTP %d (%dms)", config.target_url, r.status_code, int(r.elapsed.total_seconds() * 1000))
+        except Exception as exc:
+            logger.warning("Keep-alive ping exception: %s", exc)
+        time.sleep(240)  # 4 minutes interval (Render sleeps after 15m)
 
 
 def handle_single_command(cmd: str, config: MonitorConfig) -> None:
@@ -124,6 +137,8 @@ def run_polling_loop() -> None:
     url = f"https://api.telegram.org/bot{config.telegram_bot_token}/getUpdates"
 
     logger.info("Real-time Telegram Bot daemon listening for commands...")
+    ping_thread = threading.Thread(target=_keep_alive_worker, args=(config,), daemon=True)
+    ping_thread.start()
     while True:
         try:
             params = {"timeout": 25, "limit": 10}
