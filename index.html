@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="refresh" content="300">
+  <title>Hallucination Detector — SRE Status & Self-Healing Monitor</title>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card: #111827;
+      --border: #1f2937;
+      --text: #f9fafb;
+      --muted: #9ca3af;
+      --green: #10b981;
+      --amber: #f59e0b;
+      --red: #ef4444;
+      --blue: #3b82f6;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      padding: 2rem 1rem;
+    }
+    .container { max-width: 960px; margin: 0 auto; }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+      padding: 1.5rem;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      margin-bottom: 1.5rem;
+    }
+    .title-group h1 { font-size: 1.35rem; font-weight: 700; }
+    .title-group a { color: var(--muted); font-size: 0.88rem; text-decoration: none; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      border-radius: 999px;
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+    .badge-up { background: rgba(16, 185, 129, 0.15); color: var(--green); border: 1px solid rgba(16, 185, 129, 0.35); }
+    .badge-down { background: rgba(239, 68, 68, 0.15); color: var(--red); border: 1px solid rgba(239, 68, 68, 0.35); }
+    .dot { width: 9px; height: 9px; border-radius: 50%; background: currentColor; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    .metric-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.15rem;
+    }
+    .metric-label { color: var(--muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; }
+    .metric-val { font-size: 1.55rem; font-weight: 700; margin-top: 0.25rem; }
+    .metric-sub { color: var(--muted); font-size: 0.78rem; margin-top: 0.15rem; }
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 1.4rem;
+      margin-bottom: 1.5rem;
+    }
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+    .panel-header h2 { font-size: 1.05rem; font-weight: 600; }
+    .uptime-strip {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(6px, 1fr));
+      gap: 3px;
+      height: 30px;
+      align-items: stretch;
+    }
+    .uptime-bar { border-radius: 3px; transition: opacity 0.15s; }
+    .uptime-bar:hover { opacity: 0.75; }
+    .bar-up { background: var(--green); }
+    .bar-cold { background: var(--amber); }
+    .bar-down { background: var(--red); }
+    .latency-svg { width: 100%; height: auto; display: block; }
+    .incident-card {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem;
+      margin-bottom: 0.85rem;
+      background: rgba(255, 255, 255, 0.015);
+    }
+    .incident-header {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      flex-wrap: wrap;
+      margin-bottom: 0.45rem;
+    }
+    .inc-id { font-family: monospace; font-weight: 700; color: var(--red); }
+    .inc-time { color: var(--muted); font-size: 0.84rem; margin-left: auto; }
+    .inc-reason { font-size: 0.92rem; margin-bottom: 0.5rem; }
+    .ai-box {
+      background: rgba(59, 130, 246, 0.09);
+      border-left: 3px solid var(--blue);
+      padding: 0.65rem 0.85rem;
+      border-radius: 6px;
+      font-size: 0.86rem;
+      color: #dbeafe;
+    }
+    .pill {
+      font-size: 0.75rem;
+      padding: 0.15rem 0.55rem;
+      border-radius: 999px;
+      font-weight: 600;
+    }
+    .pill-healed { background: rgba(16, 185, 129, 0.18); color: var(--green); }
+    .pill-warn { background: rgba(245, 158, 11, 0.18); color: var(--amber); }
+    .empty-state { color: var(--muted); font-size: 0.92rem; padding: 1rem 0; text-align: center; }
+    .footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top: 2rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <div class="title-group">
+        <h1>Hallucination Detector</h1>
+        <a href="https://hallucination-detector-tveu.onrender.com/api/system/health" target="_blank" rel="noopener">https://hallucination-detector-tveu.onrender.com/api/system/health</a>
+      </div>
+      <div class="badge badge-up">
+        <span class="dot"></span>
+        All Systems Operational
+      </div>
+    </header>
+
+    <section class="grid">
+      <div class="metric-card">
+        <div class="metric-label">Uptime (24h)</div>
+        <div class="metric-val">100.00%</div>
+        <div class="metric-sub">7d: 100.00% · 30d: 87.50%</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Avg Latency (24h)</div>
+        <div class="metric-val">633 ms</div>
+        <div class="metric-sub">P95: 955 ms</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Cold Starts (24h)</div>
+        <div class="metric-val">0</div>
+        <div class="metric-sub">Threshold: &gt;10s</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">SSL Certificate</div>
+        <div class="metric-val">36 d</div>
+        <div class="metric-sub">Warn &lt; 14 days</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Real Visitors</div>
+        <div class="metric-val">1 today</div>
+        <div class="metric-sub">1 unique · 1 views</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Self-Heals (24h)</div>
+        <div class="metric-val">0</div>
+        <div class="metric-sub">Cap: 2/hr via Render API</div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Recent Check History (Last 90 Checks)</h2>
+        <span style="color: var(--muted); font-size: 0.82rem;">Green = UP · Amber = Cold Start (&gt;10s) · Red = DOWN</span>
+      </div>
+      <div class="uptime-strip">
+        <div class="uptime-bar bar-down" title="2026-10-22 13:09:01 IST — DOWN (910 ms)"></div><div class="uptime-bar bar-up" title="2026-10-22 13:09:33 IST — UP (820 ms)"></div><div class="uptime-bar bar-up" title="2026-10-22 13:09:46 IST — UP (1255 ms)"></div><div class="uptime-bar bar-up" title="2026-10-22 13:11:03 IST — UP (1202 ms)"></div><div class="uptime-bar bar-up" title="2026-10-22 13:11:31 IST — UP (1017 ms)"></div><div class="uptime-bar bar-up" title="2026-10-22 13:12:46 IST — UP (762 ms)"></div><div class="uptime-bar bar-up" title="2026-11-14 15:08:29 IST — UP (955 ms)"></div><div class="uptime-bar bar-up" title="2026-11-14 15:09:55 IST — UP (311 ms)"></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Response Latency Trend (ms)</h2>
+        <span style="color: var(--muted); font-size: 0.82rem;">Last check: 2026-11-14 15:09:55 IST</span>
+      </div>
+      
+    <svg viewBox="0 0 860 210" class="latency-svg" role="img" aria-label="Latency chart">
+      <defs>
+        <linearGradient id="latGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#10b981" stop-opacity="0.32"/>
+          <stop offset="100%" stop-color="#10b981" stop-opacity="0.0"/>
+        </linearGradient>
+      </defs>
+      <line x1="44" y1="24" x2="816" y2="24" stroke="#1f2937" stroke-dasharray="4"/>
+      <line x1="44" y1="105.0" x2="816" y2="105.0" stroke="#1f2937" stroke-dasharray="4"/>
+      <line x1="44" y1="186" x2="816" y2="186" stroke="#374151"/>
+      <text x="6" y="28" fill="#9ca3af" font-size="11">1255ms</text>
+      <text x="6" y="109.0" fill="#9ca3af" font-size="11">627ms</text>
+      <text x="6" y="186" fill="#9ca3af" font-size="11">0ms</text>
+      <polygon points="44.0,186.0 44.0,68.5 154.3,80.2 264.6,24.0 374.9,30.8 485.1,54.7 595.4,87.6 705.7,62.7 816.0,145.9 816.0,186.0" fill="url(#latGrad)"/>
+      <polyline fill="none" stroke="#10b981" stroke-width="2.2" points="44.0,68.5 154.3,80.2 264.6,24.0 374.9,30.8 485.1,54.7 595.4,87.6 705.7,62.7 816.0,145.9"/>
+      <circle cx="44.0" cy="68.5" r="4.5" fill="#ef4444"><title>2026-10-22 13:09:01 IST | DOWN | 910ms</title></circle><circle cx="154.3" cy="80.2" r="2.5" fill="#10b981"><title>2026-10-22 13:09:33 IST | UP | 820ms</title></circle><circle cx="264.6" cy="24.0" r="2.5" fill="#10b981"><title>2026-10-22 13:09:46 IST | UP | 1255ms</title></circle><circle cx="374.9" cy="30.8" r="2.5" fill="#10b981"><title>2026-10-22 13:11:03 IST | UP | 1202ms</title></circle><circle cx="485.1" cy="54.7" r="2.5" fill="#10b981"><title>2026-10-22 13:11:31 IST | UP | 1017ms</title></circle><circle cx="595.4" cy="87.6" r="2.5" fill="#10b981"><title>2026-10-22 13:12:46 IST | UP | 762ms</title></circle><circle cx="705.7" cy="62.7" r="2.5" fill="#10b981"><title>2026-11-14 15:08:29 IST | UP | 955ms</title></circle><circle cx="816.0" cy="145.9" r="2.5" fill="#10b981"><title>2026-11-14 15:09:55 IST | UP | 311ms</title></circle>
+    </svg>
+    
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Incidents, Self-Healing &amp; Gemini AI Root-Cause Triage</h2>
+      </div>
+      
+            <div class="incident-card">
+              <div class="incident-header">
+                <span class="inc-id">INC-1792654741</span>
+                
+                <span class="inc-time">2026-10-22 13:09:01 IST → 2026-10-22 13:09:33 IST</span>
+              </div>
+              <div class="inc-reason"><strong>Failing Check:</strong> HTTP 404</div>
+              <div class="ai-box"><strong>🤖 Gemini 3.8 Flash Triage:</strong><br>Root Cause: The requested health check path `/health` is not defined or mapped in the application&#x27;s routing table.<br>Evidence: Target URL returned HTTP Status Code 404 with 910 ms latency.<br>Fix: Add a `GET /health` route returning HTTP 200 in the application code, or update Render&#x27;s &quot;Health Check Path&quot; setting to match an existing endpoint.</div>
+            </div>
+            
+    </section>
+
+    <footer class="footer">
+      Powered by Render SRE Self-Healing Agent · Zero-Commit-Spam Orphan <code>gh-pages</code> Telemetry · Updated 2026-11-14 15:09:55 IST
+    </footer>
+  </div>
+</body>
+</html>

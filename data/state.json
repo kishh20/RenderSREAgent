@@ -1,0 +1,28 @@
+{
+  "current_status": "UP",
+  "consecutive_failures": 0,
+  "consecutive_slow": 0,
+  "slow_alert_active": false,
+  "restart_timestamps": [],
+  "last_daily_summary_date": "2026-11-14",
+  "last_ssl_alert_date": "",
+  "last_check_ist": "2026-11-14 15:09:55 IST",
+  "last_telegram_update_id": 128826714,
+  "visitors_today": 1,
+  "visitors_unique": 1,
+  "visitors_total": 1,
+  "incidents": [
+    {
+      "id": "INC-1792654741",
+      "start_time_ist": "2026-10-22 13:09:01 IST",
+      "start_epoch": 1792654741.484172,
+      "end_time_ist": "2026-10-22 13:09:33 IST",
+      "duration_sec": 32,
+      "reason": "HTTP 404",
+      "status_code": 404,
+      "auto_restart_attempted": false,
+      "auto_restart_succeeded": false,
+      "ai_diagnosis": "Root Cause: The requested health check path `/health` is not defined or mapped in the application's routing table.\nEvidence: Target URL returned HTTP Status Code 404 with 910 ms latency.\nFix: Add a `GET /health` route returning HTTP 200 in the application code, or update Render's \"Health Check Path\" setting to match an existing endpoint."
+    }
+  ]
+}
