@@ -61,7 +61,7 @@ def process_telegram_commands(
             continue
 
         text = str(msg.get("text", "")).strip().lower().split("@")[0]
-        if text in ("/status", "/diagnose", "/logs", "/restart") and text not in commands_to_run:
+        if text in ("/status", "/diagnose", "/logs", "/restart", "/visitors") and text not in commands_to_run:
             commands_to_run.append(text)
 
     for cmd in commands_to_run:
@@ -73,6 +73,7 @@ def process_telegram_commands(
                 f"━━━━━━━━━━━━━━━━━━━━━━\n"
                 f"• State: {'UP' if latest_check.is_up else 'DOWN'} (HTTP {latest_check.status_code})\n"
                 f"• Latency: {latest_check.latency_ms} ms\n"
+                f"• Site Visitors: {metrics.get('visitors_today', 0)} today ({metrics.get('visitors_unique', 0)} unique, {metrics.get('visitors_total', 0)} views)\n"
                 f"• 24h / 7d Uptime: {metrics['uptime_24h']}% / {metrics['uptime_7d']}%\n"
                 f"• Avg / P95 Latency: {metrics['avg_latency_24h']} ms / {metrics['p95_latency_24h']} ms\n"
                 f"• Cold Starts (24h): {metrics['cold_starts_24h']}\n"
@@ -95,6 +96,21 @@ def process_telegram_commands(
                 f"🤖 GEMINI 3.8 FLASH LOG DIAGNOSIS\n"
                 f"━━━━━━━━━━━━━━━━━━━━━━\n"
                 f"{diag}"
+            )
+            send_telegram_alert(config, reply)
+
+        elif cmd == "/visitors":
+            vt = latest_check.visitors_today or getattr(state, "visitors_today", 0)
+            vu = latest_check.visitors_unique or getattr(state, "visitors_unique", 0)
+            vtot = latest_check.visitors_total or getattr(state, "visitors_total", 0)
+            reply = (
+                f"👥 VISITOR ANALYTICS: {config.app_name}\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"• Today's Visitors: {vt} unique\n"
+                f"• Total Unique Visitors: {vu}\n"
+                f"• Total Page Views: {vtot}\n"
+                f"• Tracked Via: SQLite Session Store\n"
+                f"• Live Status: {'UP' if latest_check.is_up else 'DOWN'} ({latest_check.latency_ms}ms)"
             )
             send_telegram_alert(config, reply)
 

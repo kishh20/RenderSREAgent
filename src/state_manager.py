@@ -26,6 +26,8 @@ CSV_HEADERS = [
     "attempts_used",
     "ssl_days_remaining",
     "error_reason",
+    "visitors_today",
+    "visitors_total",
 ]
 
 MAX_CSV_RETENTION_DAYS = 30
@@ -61,6 +63,9 @@ class AgentState:
     last_ssl_alert_date: str = ""
     last_check_ist: str = ""
     last_telegram_update_id: int = 0
+    visitors_today: int = 0
+    visitors_unique: int = 0
+    visitors_total: int = 0
     incidents: list[dict[str, Any]] = field(default_factory=list)
 
     @classmethod
@@ -82,6 +87,9 @@ class AgentState:
                 last_ssl_alert_date=str(raw.get("last_ssl_alert_date", "")),
                 last_check_ist=str(raw.get("last_check_ist", "")),
                 last_telegram_update_id=int(raw.get("last_telegram_update_id", 0)),
+                visitors_today=int(raw.get("visitors_today", 0)),
+                visitors_unique=int(raw.get("visitors_unique", 0)),
+                visitors_total=int(raw.get("visitors_total", 0)),
                 incidents=list(raw.get("incidents", [])),
             )
         except Exception as exc:
@@ -157,8 +165,8 @@ def evaluate_state_transition(
         state.current_status = "UP"
         state.consecutive_failures = 0
 
-        # Evaluate consecutive slow checks (>5s)
-        if check.is_slow:
+        # Evaluate consecutive slow checks (>5s), ignoring expected cold-start wakeups
+        if check.is_slow and not check.is_cold_start:
             state.consecutive_slow += 1
             if (
                 state.consecutive_slow >= config.consecutive_slow_limit
@@ -169,6 +177,13 @@ def evaluate_state_transition(
         else:
             state.consecutive_slow = 0
             state.slow_alert_active = False
+
+        if check.visitors_today > 0:
+            state.visitors_today = check.visitors_today
+        if check.visitors_unique > 0:
+            state.visitors_unique = check.visitors_unique
+        if check.visitors_total > 0:
+            state.visitors_total = check.visitors_total
 
     else:
         # Service check failed (after all retries)
@@ -253,6 +268,8 @@ def append_and_prune_csv(csv_path: Path, check: CheckResult) -> list[dict[str, s
             else ""
         ),
         "error_reason": check.error_reason,
+        "visitors_today": str(check.visitors_today),
+        "visitors_total": str(check.visitors_total),
     }
     existing_rows.append(new_row)
 

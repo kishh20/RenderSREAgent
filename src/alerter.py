@@ -191,6 +191,7 @@ def format_daily_summary(
         f"• 7d Uptime: {metrics['uptime_7d']}%\n"
         f"• Avg / P95 Latency (24h): {metrics['avg_latency_24h']} ms / {metrics['p95_latency_24h']} ms\n"
         f"• Cold Starts (24h): {metrics['cold_starts_24h']}\n"
+        f"• Site Visitors: {metrics.get('visitors_today', 0)} today ({metrics.get('visitors_unique', 0)} unique, {metrics.get('visitors_total', 0)} views)\n"
         f"• Incidents (24h): {metrics['incidents_24h']}\n"
         f"• Auto-Restarts (24h): {metrics['restarts_24h']}\n"
         f"• SSL Cert Expiry: {metrics['ssl_days']} days\n"

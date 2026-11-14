@@ -55,6 +55,7 @@ def handle_single_command(cmd: str, config: MonitorConfig) -> None:
             "━━━━━━━━━━━━━━━━━━━━━━\n"
             "Available commands:\n"
             "• /status — Live health check, latency, uptime % & SSL\n"
+            "• /visitors — Live site visitor counts (today & total)\n"
             "• /diagnose — Gemini 3.8 Flash AI audit of Render logs\n"
             "• /logs — View latest 15 Render service log lines\n"
             "• /restart — Restart Render container & verify recovery"
@@ -72,12 +73,31 @@ def handle_single_command(cmd: str, config: MonitorConfig) -> None:
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
             f"• State: {'UP' if check.is_up else 'DOWN'} (HTTP {check.status_code})\n"
             f"• Latency: {check.latency_ms} ms\n"
+            f"• Site Visitors: {metrics.get('visitors_today', 0)} today ({metrics.get('visitors_unique', 0)} unique, {metrics.get('visitors_total', 0)} views)\n"
             f"• 24h / 7d Uptime: {metrics['uptime_24h']}% / {metrics['uptime_7d']}%\n"
             f"• Avg / P95 Latency: {metrics['avg_latency_24h']} ms / {metrics['p95_latency_24h']} ms\n"
             f"• Cold Starts (24h): {metrics['cold_starts_24h']}\n"
             f"• SSL Cert Expiry: {check.ssl_days_remaining} days\n"
             f"• Checked At: {check.timestamp_ist}\n"
             f"• Dashboard: https://kishh20.github.io/RenderSREAgent/"
+        )
+        send_telegram_alert(config, reply)
+
+    elif cmd == "/visitors":
+        check = perform_health_check(config)
+        rows = append_and_prune_csv(config.checks_csv_path, check)
+        metrics = compute_metrics(rows, state, check.epoch_sec)
+        vt = check.visitors_today or metrics.get("visitors_today", 0)
+        vu = check.visitors_unique or metrics.get("visitors_unique", 0)
+        vtot = check.visitors_total or metrics.get("visitors_total", 0)
+        reply = (
+            f"👥 VISITOR ANALYTICS: {config.app_name}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"• Today's Visitors: {vt} unique\n"
+            f"• Total Unique Visitors: {vu}\n"
+            f"• Total Page Views: {vtot}\n"
+            f"• Tracked Via: SQLite Session Store\n"
+            f"• Live Status: {'UP' if check.is_up else 'DOWN'} ({check.latency_ms}ms)"
         )
         send_telegram_alert(config, reply)
 

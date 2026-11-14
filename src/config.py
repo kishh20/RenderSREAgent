@@ -81,7 +81,7 @@ class MonitorConfig:
             app_name=os.getenv("APP_NAME", "Render Web Service").strip(),
             target_url=raw_url,
             expected_keyword=os.getenv("EXPECTED_KEYWORD", "ok").strip(),
-            request_timeout_sec=int(os.getenv("REQUEST_TIMEOUT_SEC", "35")),
+            request_timeout_sec=int(os.getenv("REQUEST_TIMEOUT_SEC", "55")),
             max_retries=int(os.getenv("MAX_RETRIES", "3")),
             retry_Backoff_base_sec=float(os.getenv("RETRY_BACKOFF_BASE_SEC", "2.0")),
             slow_threshold_ms=int(os.getenv("SLOW_THRESHOLD_MS", "5000")),

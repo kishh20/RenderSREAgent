@@ -34,6 +34,9 @@ class CheckResult:
     ssl_warning: bool
     error_reason: str = ""
     app_version: str = ""
+    visitors_today: int = 0
+    visitors_unique: int = 0
+    visitors_total: int = 0
 
 
 def check_ssl_expiry(url: str, timeout_sec: int = 10) -> tuple[int | None, str]:
@@ -119,24 +122,33 @@ def perform_health_check(
                 or config.expected_keyword.lower() in body_text.lower()
             )
 
-            # Extract optional app_version if JSON response provides it
+            # Extract optional app_version and visitor analytics if JSON response provides it
+            visitors_today = 0
+            visitors_unique = 0
+            visitors_total = 0
             try:
                 payload = response.json()
                 if isinstance(payload, dict):
                     app_version = str(payload.get("version", ""))
-            except ValueError:
+                    v_dict = payload.get("visitors", {})
+                    if isinstance(v_dict, dict):
+                        visitors_today = int(v_dict.get("today_unique") or v_dict.get("today_page_views") or 0)
+                        visitors_unique = int(v_dict.get("unique_visitors") or 0)
+                        visitors_total = int(v_dict.get("total_page_views") or 0)
+            except (ValueError, TypeError):
                 pass
 
             if response.status_code == 200 and keyword_matched:
                 is_cold = elapsed_ms > config.cold_start_threshold_ms
                 is_slow = elapsed_ms > config.slow_threshold_ms
                 logger.info(
-                    "Check UP on attempt %d/%d | status=%d | latency=%dms | cold_start=%s",
+                    "Check UP on attempt %d/%d | status=%d | latency=%dms | cold_start=%s | visitors_today=%d",
                     attempt,
                     total_attempts,
                     response.status_code,
                     elapsed_ms,
                     is_cold,
+                    visitors_today,
                 )
                 return CheckResult(
                     timestamp_ist=ts_str,
@@ -152,6 +164,9 @@ def perform_health_check(
                     ssl_warning=ssl_warning,
                     error_reason=ssl_err if ssl_warning else "",
                     app_version=app_version,
+                    visitors_today=visitors_today,
+                    visitors_unique=visitors_unique,
+                    visitors_total=visitors_total,
                 )
 
             if response.status_code != 200:

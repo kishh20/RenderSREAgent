@@ -75,6 +75,9 @@ def compute_metrics(
         "incidents_24h": incidents_24h,
         "restarts_24h": restarts_24h,
         "ssl_days": latest_ssl,
+        "visitors_today": getattr(state, "visitors_today", 0),
+        "visitors_unique": getattr(state, "visitors_unique", 0),
+        "visitors_total": getattr(state, "visitors_total", 0),
     }
 
 
@@ -380,6 +383,11 @@ def generate_dashboard_html(
         <div class="metric-label">SSL Certificate</div>
         <div class="metric-val">{metrics['ssl_days']} d</div>
         <div class="metric-sub">Warn &lt; {config.ssl_expiry_warn_days} days</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Real Visitors</div>
+        <div class="metric-val">{metrics['visitors_today']} today</div>
+        <div class="metric-sub">{metrics['visitors_unique']} unique · {metrics['visitors_total']} views</div>
       </div>
       <div class="metric-card">
         <div class="metric-label">Self-Heals (24h)</div>

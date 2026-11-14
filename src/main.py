@@ -34,8 +34,23 @@ def setup_logging() -> None:
     )
 
 
+def _load_dotenv_if_present() -> None:
+    from pathlib import Path
+    import os
+    env_path = Path(__file__).resolve().parent.parent / ".env"
+    if not env_path.exists():
+        return
+    for raw_line in env_path.read_text(encoding="utf-8-sig").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        os.environ[k.strip()] = v.strip()
+
+
 def run_monitor_cycle(config: MonitorConfig | None = None) -> int:
     """Execute one complete check, self-heal, alert, and dashboard generation cycle."""
+    _load_dotenv_if_present()
     cfg = config or MonitorConfig.from_env()
     logger = logging.getLogger("RenderSREAgent")
 
